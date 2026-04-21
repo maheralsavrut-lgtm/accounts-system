@@ -6,9 +6,11 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { Mail, Lock, Shield, Eye, EyeOff, Phone, Ticket, CheckCircle2, UserPlus, User } from "lucide-react";
 import { setSSOSession, handleAuthRedirect } from "../lib/auth-sso";
+import { useAuth } from "../context/AuthContext";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { logActivity } = useAuth();
   const [email, setEmail] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -73,6 +75,10 @@ export default function Signup() {
       }
 
       const userId = res.user.uid;
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('ar-EG');
+      const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
       await setDoc(doc(db, "users", userId), {
         uid: userId,
         email,
@@ -82,7 +88,23 @@ export default function Signup() {
         myReferralCode: userId.slice(0, 6).toUpperCase(),
         bx_balance: referrerDocId ? 10 : 5, 
         tier: "Free",
-        createdAt: new Date()
+        accountStatus: "pending",
+        verificationStatus: "unverified",
+        createdAt: now,
+        activity: [
+          {
+            event: "انشاء حساب",
+            sector: "الحسابات",
+            date: dateStr,
+            time: timeStr
+          },
+          {
+            event: referrerDocId ? "الحصول على 10 BX هدية تسجيل" : "الحصول على 5 BX هدية تسجيل",
+            sector: "المحفظة",
+            date: dateStr,
+            time: timeStr
+          }
+        ]
       });
 
       const token = await res.user.getIdToken();
