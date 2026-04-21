@@ -17,7 +17,7 @@ const techSocial = [
 
 export default function Footer() {
   return (
-    <footer className="relative z-10 py-16 border-t border-white/5 bg-[#050505]/90 backdrop-blur-xl mt-16 text-center italic">
+    <footer className="relative z-10 py-16 border-t border-white/5 bg-[#050505]/90 backdrop-blur-xl mt-16 text-center italic" dir="rtl">
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
           <div className="flex flex-col items-center">
