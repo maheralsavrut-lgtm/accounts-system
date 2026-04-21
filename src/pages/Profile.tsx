@@ -1,7 +1,36 @@
+import React from "react";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext";
-import { User, Wallet, ShieldCheck, Calendar, Hash, Award, Star, TrendingUp } from "lucide-react";
+import { 
+  User, Wallet, Shield, Award, MapPin, 
+  ExternalLink, CheckCircle2, AlertCircle, Clock, Activity,
+  ChevronLeft
+} from "lucide-react";
 import { Navigate } from "react-router-dom";
+
+interface ActivityRowProps {
+  event: string;
+  sector: string;
+  date: string;
+  time: string;
+}
+
+const ActivityRow: React.FC<ActivityRowProps> = ({ event, sector, date, time }) => (
+  <div className="flex items-center justify-between p-4 border-b border-white/[0.03] hover:bg-white/[0.02] transition-all group bg-white/[0.01]">
+    <div className="flex flex-col items-end flex-1 px-4 order-4">
+      <span className="text-white font-black italic text-xs">{event}</span>
+    </div>
+    <div className="w-24 text-right order-3">
+      <span className="text-royal-blue text-[10px] font-bold uppercase tracking-widest">{sector}</span>
+    </div>
+    <div className="w-24 text-right order-2">
+      <span className="text-gray-500 text-[10px] font-bold">{date}</span>
+    </div>
+    <div className="w-16 text-right order-1">
+      <span className="text-gray-600 text-[10px] font-mono">{time}</span>
+    </div>
+  </div>
+);
 
 export default function Profile() {
   const { user, userData, loading } = useAuth();
@@ -9,75 +38,178 @@ export default function Profile() {
   if (loading) return <div className="min-h-screen flex items-center justify-center italic text-royal-blue">جاري التحميل...</div>;
   if (!user) return <Navigate to="/login" />;
 
-  const stats = [
-    { label: "رصيد Bx", value: userData?.bx_balance || 0, icon: <Wallet size={20} />, color: "text-amber-400" },
-    { label: "الفئة", value: userData?.tier || "Free", icon: <Award size={20} />, color: "text-purple-400" },
-    { label: "كود الدعوة", value: userData?.myReferralCode || "---", icon: <Hash size={20} />, color: "text-royal-blue" },
-  ];
+  const isVerified = userData?.verificationStatus === "verified";
+  const isPendingVerification = userData?.verificationStatus === "pending";
+  const isActive = userData?.accountStatus === "active";
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12 italic text-right">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="glass p-8 md:p-12 rounded-[3rem] border border-white/5 relative overflow-hidden"
-      >
-        {/* Background Glow */}
-        <div className="absolute -top-24 -right-24 w-64 h-64 bg-royal-blue/10 blur-[100px] rounded-full" />
+    <div className="max-w-6xl mx-auto px-6 py-12 relative z-10" dir="rtl">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <div className="flex flex-col md:flex-row-reverse items-center gap-8 mb-12 border-b border-white/5 pb-12">
-          <div className="w-32 h-32 rounded-full border-4 border-royal-blue/20 p-1 relative">
-            <div className="w-full h-full rounded-full overflow-hidden bg-white/5 flex items-center justify-center">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <User size={64} className="text-royal-blue/40" />
+        {/* Left Column: Avatar & Quick Info */}
+        <div className="lg:col-span-4 space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+            className="glass p-8 rounded-[3rem] border border-white/5 text-center flex flex-col items-center shadow-2xl relative overflow-hidden"
+          >
+            <div className="relative group mb-6">
+              <div className="w-32 h-32 rounded-full border-2 border-royal-blue/30 p-1 flex items-center justify-center bg-royal-blue/5 overflow-hidden">
+                {userData?.photoURL || user.photoURL ? (
+                  <img src={userData?.photoURL || user.photoURL} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <User size={64} className="text-royal-blue/20" />
+                )}
+              </div>
+              
+              {/* Verified Badge */}
+              {isVerified && (
+                <div 
+                  className="absolute bottom-1 right-1 bg-royal-blue text-white p-1.5 rounded-full border-2 border-[#0A0A0A] shadow-lg cursor-help group/v transition-transform hover:scale-110"
+                >
+                  <CheckCircle2 size={16} fill="white" className="text-royal-blue" />
+                  <div className="absolute bottom-full right-0 mb-3 whitespace-nowrap bg-royal-blue text-white text-[10px] font-black italic p-3 rounded-2xl opacity-0 group-hover/v:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/10 z-50">
+                     تم التحقق من هوية هذا المستخدم
+                  </div>
+                </div>
               )}
             </div>
-            {userData?.tier === "Pro" && (
-              <div className="absolute -bottom-2 -right-2 bg-royal-blue text-white p-1.5 rounded-lg shadow-lg">
-                <Star size={18} fill="currentColor" />
-              </div>
-            )}
-          </div>
 
-          <div className="flex-1 space-y-2">
-            <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">
-              {userData?.displayName || user.email?.split('@')[0]}
-            </h1>
-            <p className="text-gray-500 font-bold text-sm tracking-widest">{user.email}</p>
-            <div className="flex items-center gap-4 mt-4 justify-end">
-              <span className="px-3 py-1 bg-royal-blue/10 border border-royal-blue/20 rounded-full text-[10px] font-black text-royal-blue uppercase tracking-widest flex items-center gap-2">
-                <ShieldCheck size={12} /> توثيق الهوية: {userData?.verified ? "مكتمل" : "قيد المراجعة"}
-              </span>
+            <div className="space-y-1 mb-8">
+              <h2 className="text-2xl font-black text-white italic">{userData?.displayName || user.displayName || "مستخدم جديد"}</h2>
+              <p className="text-gray-500 text-xs font-bold tracking-widest uppercase">{user.email}</p>
             </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {stats.map((stat, i) => (
-            <motion.div 
-              key={i} 
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.1 }}
-              className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl hover:border-royal-blue/30 transition-all group"
-            >
-              <div className={`${stat.color} mb-3 group-hover:scale-110 transition-transform w-fit ml-auto`}>
-                {stat.icon}
+            <div className="w-full grid grid-cols-2 gap-4">
+              <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter mb-1">الرصيد الحالي</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="text-xl font-black text-royal-blue italic">{userData?.bx_balance || 0}</span>
+                  <span className="text-[10px] font-black text-white italic opacity-50 uppercase">Bx</span>
+                </div>
               </div>
-              <p className="text-gray-600 font-bold text-[10px] uppercase tracking-widest mb-1">{stat.label}</p>
-              <p className="text-2xl font-black text-white italic">{stat.value}</p>
-            </motion.div>
-          ))}
+              <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter mb-1">الفئة</p>
+                <span className="text-sm font-black text-white italic uppercase tracking-widest">{userData?.tier || "Free"}</span>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+            className="glass p-8 rounded-[3rem] border border-white/5 space-y-6 shadow-xl"
+          >
+            <div className="flex flex-col gap-4 text-right">
+              <div className="flex items-center justify-between flex-row-reverse">
+                <div className="flex items-center gap-3">
+                  <Shield size={18} className="text-royal-blue" />
+                  <span className="text-white font-black italic">توثيق الهوية</span>
+                </div>
+                <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isVerified ? 'bg-royal-blue/20 text-royal-blue' : isPendingVerification ? 'bg-orange-500/20 text-orange-500' : 'bg-red-500/20 text-red-500'}`}>
+                  {isVerified ? "موثق" : isPendingVerification ? "قيد المراجعة" : "غير موثق"}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between flex-row-reverse border-t border-white/5 pt-4">
+                <div className="flex items-center gap-3">
+                  <Activity size={18} className="text-royal-blue" />
+                  <span className="text-white font-black italic">حالة الحساب</span>
+                </div>
+                <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isActive ? 'bg-green-500/20 text-green-500' : 'bg-orange-500/20 text-orange-500'}`}>
+                  {isActive ? "نشط" : "معلق"}
+                </span>
+              </div>
+
+              {!isActive && (
+                <div className="bg-royal-blue/5 p-4 rounded-2xl border border-royal-blue/10 flex items-start gap-3 flex-row-reverse mt-2">
+                  <AlertCircle size={14} className="text-royal-blue shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-gray-400 font-bold leading-relaxed text-right italic">
+                     يجب شحن المحفظة مرة واحدة على الأقل لتفعيل الحساب واستخدام الخدمات.
+                  </p>
+                </div>
+              )}
+              {isActive && (
+                <div className="bg-green-500/5 p-4 rounded-2xl border border-green-500/10 flex items-start gap-3 flex-row-reverse mt-2">
+                  <CheckCircle2 size={14} className="text-green-500 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-green-500/70 font-bold leading-relaxed text-right italic font-black">
+                     هذا الحساب نشط ويمكنه استخدام كافة الخدمات.
+                  </p>
+                </div>
+              )}
+            </div>
+          </motion.div>
         </div>
 
-        <div className="space-y-6">
-          <h2 className="text-xl font-black text-white italic border-r-4 border-royal-blue pr-4">التحليلات والنشاط</h2>
-          <div className="bg-white/[0.01] border border-white/5 rounded-[2rem] p-8 text-center">
-            <TrendingUp size={48} className="mx-auto text-gray-800 mb-4" />
-            <p className="text-gray-500 font-bold italic">لا يوجد نشاط مسجل مؤخراً في المنظومة.</p>
-            <button className="mt-6 px-6 py-2 bg-royal-blue/10 hover:bg-royal-blue/20 text-royal-blue rounded-xl text-xs font-black transition-all">اكتشف الخدمات المتاحة</button>
-          </div>
+        {/* Right Column: Key Stats & Activity */}
+        <div className="lg:col-span-8 space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl"
+          >
+            <div className="p-8 border-b border-white/5 bg-white/[0.01] flex items-center justify-between flex-row-reverse">
+              <div className="flex items-center gap-3">
+                <Clock className="text-royal-blue" size={24} />
+                <h3 className="text-xl font-black text-white italic">التحليلات والنشاط</h3>
+              </div>
+              <Activity size={20} className="text-gray-600" />
+            </div>
+            
+            <div className="bg-[#0A0A0A]">
+              {/* Table Header */}
+              <div className="flex items-center justify-between p-4 bg-white/[0.02] border-b border-white/5 text-right font-black italic text-[9px] uppercase tracking-widest text-gray-500">
+                 <div className="flex-1 px-4 order-4">الحدث</div>
+                 <div className="w-24 order-3">القطاع</div>
+                 <div className="w-24 order-2">التاريخ</div>
+                 <div className="w-16 order-1">الوقت</div>
+              </div>
+
+              {/* Rows */}
+              <div className="divide-y divide-white/[0.02]">
+                {userData?.activity && userData.activity.length > 0 ? (
+                  userData.activity.slice().reverse().map((act: any, idx: number) => (
+                    <ActivityRow 
+                      key={idx}
+                      event={act.event}
+                      sector={act.sector}
+                      date={act.date}
+                      time={act.time}
+                    />
+                  ))
+                ) : (
+                  <div className="p-12 text-center text-gray-600 italic font-bold">لا يوجد نشاط مسجل بعد</div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-8"
+          >
+             <div className="glass p-8 rounded-[3rem] border border-white/5 flex items-center gap-6 group hover:border-royal-blue/30 transition-all cursor-pointer">
+              <div className="w-14 h-14 bg-royal-blue/10 rounded-2xl flex items-center justify-center text-royal-blue group-hover:bg-royal-blue group-hover:text-white transition-all shadow-lg shadow-royal-blue/10">
+                <Award size={28} />
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">كود الإحالة الخاص بي</p>
+                <div className="flex items-center gap-2 justify-end">
+                  <span className="text-lg font-black text-white italic">{userData?.myReferralCode || "------"}</span>
+                  <ExternalLink size={14} className="text-gray-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="glass p-8 rounded-[3rem] border border-white/5 flex items-center gap-6 group hover:border-royal-blue/30 transition-all cursor-pointer">
+              <div className="w-14 h-14 bg-royal-blue/10 rounded-2xl flex items-center justify-center text-royal-blue group-hover:bg-royal-blue group-hover:text-white transition-all shadow-lg shadow-royal-blue/10">
+                <MapPin size={28} />
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">المنطقة والبلد</p>
+                <span className="text-lg font-black text-white italic">{userData?.region || "غير محدد"}</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
