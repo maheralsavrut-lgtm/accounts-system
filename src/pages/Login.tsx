@@ -6,9 +6,11 @@ import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Mail, Lock, LogIn, Shield, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { handleAuthRedirect, setSSOSession } from "../lib/auth-sso";
+import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { logActivity } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +20,7 @@ export default function Login() {
   const handleSuccess = async (user: any) => {
     const token = await user.getIdToken();
     setSSOSession(token);
+    await logActivity("تسجيل دخول", "الحسابات");
     
     // Check if we need to redirect back to another subdomain
     const redirected = handleAuthRedirect();
@@ -51,6 +54,10 @@ export default function Login() {
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('ar-EG');
+        const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
         await setDoc(userRef, { 
           uid: res.user.uid, 
           email: res.user.email, 
@@ -59,7 +66,23 @@ export default function Login() {
           myReferralCode: res.user.uid.slice(0, 6).toUpperCase(),
           bx_balance: 5, 
           tier: "Free", 
-          createdAt: new Date() 
+          accountStatus: "pending",
+          verificationStatus: "unverified",
+          createdAt: now,
+          activity: [
+            {
+              event: "انشاء حساب (جوجل)",
+              sector: "الحسابات",
+              date: dateStr,
+              time: timeStr
+            },
+            {
+              event: "الحصول على 5 BX هدية تسجيل",
+              sector: "المحفظة",
+              date: dateStr,
+              time: timeStr
+            }
+          ]
         });
       }
       
