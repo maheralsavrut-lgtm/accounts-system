@@ -21,7 +21,7 @@ export default function Header() {
                 )}
               </div>
               <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors hidden md:block italic">
-                {userData?.displayName || user.email?.split('@')[0]}
+                {userData?.displayName || user.displayName || "مستخدم"}
               </span>
             </Link>
             <div className="h-6 w-px bg-white/10 hidden md:block" />
