@@ -2,15 +2,16 @@ import React, { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { useNavigate, Link } from "react-router-dom";
 import { auth, db } from "../lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { Mail, Lock, Shield, Eye, EyeOff, Phone, Ticket, CheckCircle2, UserPlus } from "lucide-react";
+import { Mail, Lock, Shield, Eye, EyeOff, Phone, Ticket, CheckCircle2, UserPlus, User } from "lucide-react";
 import { setSSOSession, handleAuthRedirect } from "../lib/auth-sso";
 
 export default function Signup() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -62,6 +63,9 @@ export default function Signup() {
 
       const res = await createUserWithEmailAndPassword(auth, email, password);
 
+      // Update Auth Profile
+      await updateProfile(res.user, { displayName: username });
+
       if (referrerDocId) {
         await setDoc(doc(db, "users", referrerDocId), { 
           bx_balance: referrerBalance + 5 
@@ -72,6 +76,7 @@ export default function Signup() {
       await setDoc(doc(db, "users", userId), {
         uid: userId,
         email,
+        displayName: username,
         phone,
         usedReferralCode: referralCode ? referralCode.toUpperCase() : null,
         myReferralCode: userId.slice(0, 6).toUpperCase(),
@@ -112,6 +117,11 @@ export default function Signup() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-3">
+            <div className="relative">
+              <input type="text" placeholder="الاسم بالكامل" required className="w-full bg-white/[0.02] border border-white/10 p-4 pr-11 rounded-2xl focus:border-royal-blue/40 outline-none text-sm text-white text-right" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <User className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
+            </div>
+
             <div className="relative">
               <input type="email" placeholder="البريد الإلكتروني" required className="w-full bg-white/[0.02] border border-white/10 p-4 pr-11 rounded-2xl focus:border-royal-blue/40 outline-none text-sm text-white text-right" value={email} onChange={(e) => setEmail(e.target.value)} />
               <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
