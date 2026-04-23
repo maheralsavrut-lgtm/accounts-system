@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, Link } from "react-router-dom";
 import { auth, db } from "../lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
@@ -14,6 +14,8 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [username, setUsername] = useState("");
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -24,6 +26,32 @@ export default function Signup() {
 
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+
+  // Username validation effect
+  React.useEffect(() => {
+    const checkAvailability = async () => {
+       if (username.length < 3) {
+         setUsernameAvailable(null);
+         setSuggestions([]);
+         return;
+       }
+       const q = query(collection(db, "users"), where("displayName", "==", username));
+       const snap = await getDocs(q);
+       if (!snap.empty) {
+         setUsernameAvailable(false);
+         setSuggestions([
+            `${username}${Math.floor(Math.random() * 999)}`,
+            `${username}_bb`,
+            `user_${username}`
+         ]);
+       } else {
+         setUsernameAvailable(true);
+         setSuggestions([]);
+       }
+    };
+    const timer = setTimeout(checkAvailability, 500);
+    return () => clearTimeout(timer);
+  }, [username]);
 
   const isEmailMatch = email === confirmEmail;
   const isPassMatch = password === confirmPassword;
@@ -40,6 +68,7 @@ export default function Signup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (usernameAvailable === false) return setErrorMsg("اسم المستخدم هذا مأخوذ بالفعل");
     if (!isEmailMatch) return setErrorMsg("البريد الإلكتروني غير متطابق");
     if (!isPassMatch) return setErrorMsg("كلمة السر غير متطابقة");
     if (password.length < 8) return setErrorMsg("كلمة السر يجب أن تكون 8 أحرف على الأقل");
@@ -140,8 +169,49 @@ export default function Signup() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-3">
             <div className="relative">
-              <input type="text" placeholder="الاسم بالكامل" required className="w-full bg-white/[0.02] border border-white/10 p-4 pr-11 rounded-2xl focus:border-royal-blue/40 outline-none text-sm text-white text-right" value={username} onChange={(e) => setUsername(e.target.value)} />
-              <User className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
+              <input 
+                type="text" 
+                placeholder="اسم المستخدم (يفضل الحقيقي)" 
+                required 
+                className={`w-full bg-white/[0.02] border ${usernameAvailable === false ? 'border-red-500/50' : usernameAvailable === true ? 'border-green-500/50' : 'border-white/10'} p-4 pr-11 rounded-2xl focus:border-royal-blue/40 outline-none text-sm text-white text-right`} 
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)} 
+              />
+              <User className={`absolute right-4 top-1/2 -translate-y-1/2 ${usernameAvailable === false ? 'text-red-500' : usernameAvailable === true ? 'text-green-500' : 'text-gray-600'}`} size={16} />
+              
+              <AnimatePresence>
+                {usernameAvailable === false && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="mt-2 text-right px-2"
+                  >
+                    <p className="text-[9px] text-red-500 font-bold mb-2 italic">هذا الاسم مأخوذ بالفعل. جرب أحد الاقتراحات:</p>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {suggestions.map((s) => (
+                        <button 
+                          key={s} 
+                          type="button" 
+                          onClick={() => setUsername(s)}
+                          className="text-[9px] bg-white/5 border border-white/5 px-3 py-1 rounded-full text-gray-400 hover:text-white hover:border-royal-blue transition-all"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+                {usernameAvailable === true && (
+                  <motion.p 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    className="text-[9px] text-green-500 font-bold mt-1 mr-2 italic"
+                  >
+                    اسم المستخدم متاح
+                  </motion.p>
+                )}
+              </AnimatePresence>
+              <p className="text-[8px] text-gray-600 mt-1 mr-2 italic font-bold">يرجى كتابة اسمك الحقيقي لضمان سلامة بياناتك في المنظومة.</p>
             </div>
 
             <div className="relative">
@@ -216,4 +286,3 @@ export default function Signup() {
     </div>
   );
 }
-
