@@ -5,35 +5,56 @@ import {
   Settings as SettingsIcon, Bell, Lock, User, Globe, 
   Shield, CreditCard, ChevronLeft, ChevronRight,
   Camera, Save, AlertCircle, CheckCircle2, Wallet, ExternalLink,
-  Upload, FileText, Smartphone, Info
+  Upload, FileText, Smartphone, Info, Trash2, Search, QrCode, RefreshCw, X
 } from "lucide-react";
 import { Navigate } from "react-router-dom";
-import { doc, updateDoc, collection, query, where, getDocs, increment, arrayUnion } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs, increment, arrayUnion, onSnapshot } from "firebase/firestore";
 import { updateProfile, updatePassword } from "firebase/auth";
 import { db, auth as firebaseAuth } from "../lib/firebase";
+import { QRCodeCanvas } from "qrcode.react";
 
-type SettingsView = "main" | "profile" | "security" | "verification" | "region" | "kyc-form";
+type SettingsView = "main" | "profile" | "security" | "verification" | "region" | "kyc-form" | "deletion";
 
-const SettingItem = ({ icon: Icon, title, desc, onClick, external }: { icon: any, title: string, desc: string, onClick?: () => void, external?: boolean }) => (
+const ARAB_COUNTRIES = [
+  { id: "EG", name: "Egypt (مصر)" },
+  { id: "SA", name: "Saudi Arabia (السعودية)" },
+  { id: "AE", name: "United Arab Emirates (الإمارات)" },
+  { id: "KW", name: "Kuwait (الكويت)" },
+  { id: "QA", name: "Qatar (قطر)" },
+  { id: "BH", name: "Bahrain (البحرين)" },
+  { id: "OM", name: "Oman (عمان)" },
+  { id: "JO", name: "Jordan (الأردن)" },
+  { id: "IQ", name: "Iraq (العراق)" },
+  { id: "LB", name: "Lebanon (لبنان)" },
+  { id: "YE", name: "Yemen (اليمن)" },
+  { id: "MA", name: "Morocco (المغرب)" },
+  { id: "DZ", name: "Algeria (الجزائر)" },
+  { id: "TN", name: "Tunisia (تونس)" },
+  { id: "LY", name: "Libya (ليبيا)" },
+  { id: "SD", name: "Sudan (السودان)" },
+  { id: "MR", name: "Mauritania (موريتانيا)" }
+];
+
+const SettingItem = ({ icon: Icon, title, desc, onClick, external, danger }: { icon: any, title: string, desc: string, onClick?: () => void, external?: boolean, danger?: boolean }) => (
   <div 
     onClick={onClick}
-    className="flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all group cursor-pointer border-b border-white/5 last:border-0 border-r-2 border-transparent hover:border-royal-blue bg-white/[0.01]"
+    className={`flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all group cursor-pointer border-b border-white/5 last:border-0 border-r-2 border-transparent ${danger ? 'hover:border-red-500 hover:bg-red-500/[0.02]' : 'hover:border-royal-blue bg-white/[0.01]'}`}
   >
-    <div className="text-gray-600 group-hover:text-royal-blue transition-colors">
-      {external ? <ExternalLink size={18} /> : <ChevronLeft size={20} />}
+    <div className={danger ? "text-red-500/50 group-hover:text-red-500 transition-colors" : "text-gray-600 group-hover:text-royal-blue transition-colors"}>
+      {external ? <ExternalLink size={18} /> : (title === "حذف الحساب الموحد" ? <ChevronLeft size={20} className="text-red-500" /> : <ChevronLeft size={20} />)}
     </div>
     <div className="flex-1 px-6 text-right">
-      <h3 className="text-white font-black italic">{title}</h3>
+      <h3 className={`font-black italic ${danger ? 'text-red-500' : 'text-white'}`}>{title}</h3>
       <p className="text-gray-500 text-[10px] font-bold mt-1 uppercase tracking-widest">{desc}</p>
     </div>
-    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 group-hover:bg-royal-blue/10 group-hover:text-royal-blue transition-all">
+    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${danger ? 'bg-red-500/5 text-red-500 group-hover:bg-red-500/10' : 'bg-white/5 text-gray-500 group-hover:bg-royal-blue/10 group-hover:text-royal-blue'}`}>
       <Icon size={24} />
     </div>
   </div>
 );
 
 export default function Settings() {
-  const { user, userData, loading, logActivity, sendNotification } = useAuth();
+  const { user, userData, loading, logActivity, sendNotification, deleteAccount } = useAuth();
   const [view, setView] = useState<SettingsView>("main");
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -51,7 +72,8 @@ export default function Settings() {
   const [referralClaimed, setReferralClaimed] = useState(false);
 
   // Region State
-  const [region, setRegion] = useState("مصر");
+  const [region, setRegion] = useState("Egypt (مصر)");
+  const [countrySearch, setCountrySearch] = useState("");
   
   // KYC State
   const [kycType, setKycType] = useState<"id" | "passport" | null>(null);
@@ -61,6 +83,9 @@ export default function Settings() {
     passportNum: "", issueDate: "",
     agreed: false
   });
+  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
+  const [showQR, setShowQR] = useState(false);
+  const [mobileSyncStatus, setMobileSyncStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
 
   // Status Messages
   const [status, setStatus] = useState({ type: "", msg: "" });
@@ -71,10 +96,26 @@ export default function Settings() {
       setDisplayName(userData.displayName || user?.displayName || "");
       setPhone(userData.phone || "");
       setPhotoURL(userData.photoURL || user?.photoURL || "");
-      setRegion(userData.region || "مصر");
+      setRegion(userData.region || "Egypt (مصر)");
       setReferralClaimed(!!userData.usedReferralCode);
+      setUploadedDocs(userData.kyc_docs || []);
     }
   }, [userData, user]);
+
+  // Sync Listener for Mobile Uploads
+  useEffect(() => {
+    if (view === 'kyc-form' && user) {
+      const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+        const data = snap.data();
+        if (data?.last_sync_upload) {
+           setUploadedDocs(data.kyc_docs || []);
+           setMobileSyncStatus('success');
+           setTimeout(() => setMobileSyncStatus('idle'), 3000);
+        }
+      });
+      return () => unsub();
+    }
+  }, [view, user]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center italic text-royal-blue">جاري التحميل...</div>;
   if (!user) return <Navigate to="/login" />;
@@ -302,12 +343,14 @@ export default function Settings() {
           </motion.div>
         );
 
-      case "kyc-form":
+      case "kyc-form": {
+        const syncUrl = `${window.location.origin}/#/sync-upload/${user.uid}`;
         return (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-8 space-y-8 text-right">
              {!kycType ? (
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                   <button 
+                    type="button"
                     onClick={() => setKycType("id")}
                     className="p-10 bg-white/[0.02] border-2 border-white/5 rounded-[2.5rem] hover:border-royal-blue/30 transition-all group flex flex-col items-center gap-4"
                   >
@@ -315,6 +358,7 @@ export default function Settings() {
                     <span className="text-white font-black italic uppercase tracking-tighter">بطاقة الهوية الوطنية</span>
                   </button>
                   <button 
+                    type="button"
                     onClick={() => setKycType("passport")}
                     className="p-10 bg-white/[0.02] border-2 border-white/5 rounded-[2.5rem] hover:border-royal-blue/30 transition-all group flex flex-col items-center gap-4"
                   >
@@ -329,13 +373,37 @@ export default function Settings() {
                     <button type="button" onClick={() => setKycType(null)} className="text-gray-500 hover:text-white text-[9px] font-bold">تغيير النوع</button>
                   </div>
 
+                  {/* QR Sync UI */}
+                  <div className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] flex flex-col items-center gap-4 text-center">
+                    <div className="flex items-center gap-3 flex-row-reverse">
+                       <QrCode className="text-royal-blue" size={20} />
+                       <h4 className="text-white font-black text-xs uppercase tracking-widest italic tracking-wider">المزامنة مع الجوال للتصوير الحي</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full items-center">
+                       <div className="bg-white p-4 rounded-3xl shadow-2xl mx-auto cursor-pointer" onClick={() => window.open(syncUrl)}>
+                          <QRCodeCanvas value={syncUrl} size={130} />
+                       </div>
+                       <div className="space-y-4">
+                          <p className="text-[9px] text-gray-500 font-bold leading-relaxed text-right italic">
+                             امسح الكود لربط هاتفك وبدء التصوير الحي للمستندات. ستظهر علامة صح تلقائياً عند إتمام الرفع من الجوال.
+                          </p>
+                          <div className={`p-4 rounded-3xl border flex items-center justify-center gap-3 ${mobileSyncStatus === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-white/5 border-white/5 text-gray-600'}`}>
+                             {mobileSyncStatus === 'success' ? (
+                                <><CheckCircle2 size={16} /> <span className="text-[10px] font-black italic">تم المزامنة بنجاح</span></>
+                             ) : (
+                                <><Smartphone size={16} /> <span className="text-[10px] font-black italic tracking-widest">في انتظار الاتصال...</span></>
+                             )}
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Common Fields */}
                     <div className="md:col-span-2 space-y-2">
                        <label className="text-[10px] uppercase font-bold text-gray-500 mr-2 italic">الاسم الكامل (كما هو بالمستند)</label>
                        <input required type="text" className="w-full bg-white/[0.02] border border-white/10 p-4 rounded-2xl focus:border-royal-blue outline-none text-white text-sm text-right" value={kycData.fullName} onChange={(e) => setKycData({...kycData, fullName: e.target.value})} />
                     </div>
-
                     {kycType === 'id' ? (
                       <>
                         <div className="md:col-span-2 space-y-2">
@@ -371,8 +439,8 @@ export default function Settings() {
                     <div className="space-y-2 flex flex-col">
                        <label className="text-[10px] uppercase font-bold text-gray-500 mr-2 italic">النوع</label>
                        <select className="w-full bg-white/[0.03] border border-white/10 p-4 rounded-2xl focus:border-royal-blue outline-none text-white text-sm appearance-none cursor-pointer" value={kycData.gender} onChange={(e) => setKycData({...kycData, gender: e.target.value})}>
-                          <option value="ذکر">ذكر</option>
-                          <option value="انثی">أنثى</option>
+                          <option value="ذكر">ذكر</option>
+                          <option value="أنثى">أنثى</option>
                        </select>
                     </div>
                     <div className="space-y-2">
@@ -396,20 +464,45 @@ export default function Settings() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
                     <div className="space-y-4">
                        <h4 className="text-white font-black italic text-xs uppercase tracking-widest px-2">وجه البطاقة / صورة الجواز</h4>
-                       <div className="aspect-video bg-white/[0.02] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-2 group hover:border-royal-blue/30 transition-all cursor-pointer overflow-hidden p-2">
-                          <Upload className="text-gray-600 mb-2 group-hover:text-royal-blue transition-colors" size={32} />
-                          <span className="text-[9px] font-bold text-gray-500">اضغط لرفع الملف (PNG, JPG)</span>
-                          <p className="text-[8px] text-gray-600 px-8 text-center leading-relaxed font-bold">تأكد من أن جميع البيانات واضحة وضوء الغرفة كافٍ</p>
+                       <div className="aspect-video bg-white/[0.02] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-2 group hover:border-royal-blue/30 transition-all cursor-pointer overflow-hidden p-2 relative">
+                         {uploadedDocs.length > 0 ? (
+                           <>
+                             <CheckCircle2 size={40} className="text-green-500" />
+                             <span className="text-[9px] font-black text-green-500 italic mt-2">تم رفع المستند</span>
+                             <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                <button type="button" className="p-3 bg-white/10 rounded-2xl hover:bg-royal-blue transition-all" title="تغيير"><RefreshCw size={18} /></button>
+                                <button type="button" onClick={() => setUploadedDocs([])} className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-all" title="حذف"><Trash2 size={18} /></button>
+                             </div>
+                           </>
+                         ) : (
+                           <>
+                             <Upload className="text-gray-600 mb-2 group-hover:text-royal-blue transition-colors" size={32} />
+                             <span className="text-[9px] font-bold text-gray-500">اضغط لرفع الملف (PNG, JPG)</span>
+                           </>
+                         )}
                        </div>
                     </div>
                     {kycType === 'id' && (
-                      <div className="space-y-4">
+                       <div className="space-y-4">
                         <h4 className="text-white font-black italic text-xs uppercase tracking-widest px-2">ظهر البطاقة الوطنية</h4>
-                        <div className="aspect-video bg-white/[0.02] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-2 group hover:border-royal-blue/30 transition-all cursor-pointer overflow-hidden p-2">
-                            <Upload className="text-gray-600 mb-2 group-hover:text-royal-blue transition-colors" size={32} />
-                            <span className="text-[9px] font-bold text-gray-500">اضغط لرفع الملف (PNG, JPG)</span>
+                        <div className="aspect-video bg-white/[0.02] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-2 group hover:border-royal-blue/30 transition-all cursor-pointer overflow-hidden p-2 relative">
+                          {uploadedDocs.length > 1 ? (
+                            <>
+                              <CheckCircle2 size={40} className="text-green-500" />
+                              <span className="text-[9px] font-black text-green-500 italic mt-2">تم رفع المستند</span>
+                              <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                 <button type="button" className="p-3 bg-white/10 rounded-2xl hover:bg-royal-blue transition-all"><RefreshCw size={18} /></button>
+                                 <button type="button" className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-all"><Trash2 size={18} /></button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="text-gray-600 mb-2 group-hover:text-royal-blue transition-colors" size={32} />
+                              <span className="text-[9px] font-bold text-gray-500">اضغط لرفع الملف (PNG, JPG)</span>
+                            </>
+                          )}
                         </div>
-                      </div>
+                       </div>
                     )}
                     <div className="md:col-span-2 space-y-4">
                        <h4 className="text-white font-black italic text-xs uppercase tracking-widest px-2 text-center">صورة سيلفي حديثة للوجه</h4>
@@ -446,6 +539,7 @@ export default function Settings() {
              )}
           </motion.div>
         );
+      }
 
       case "security":
         return (
@@ -470,23 +564,95 @@ export default function Settings() {
           </motion.form>
         );
 
-      case "region":
+      case "deletion": {
+        const isDeveloper = userData?.tier === "Developer" || userData?.isDeveloper;
+        return (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-8 space-y-8 text-right">
+             <div className="bg-red-500/5 border border-red-500/10 p-6 rounded-[2rem] space-y-4">
+                <div className="flex items-center gap-4 justify-end">
+                   <h2 className="text-xl font-black text-red-500 italic">إشعار حذف الحساب الموحد</h2>
+                   <Trash2 className="text-red-500" size={24} />
+                </div>
+                <p className="text-[11px] font-black italic text-red-500 uppercase tracking-widest">تنبيه: أنت على وشك اتخاذ إجراء نهائي بحذف حسابك لدى "بلاك بوكس تكنولوجي".</p>
+                <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                   سيؤدي هذا الإجراء إلى المسح الفوري لبياناتك الشخصية وتوقف وصولك إلى الخدمات والمعاملات في القطاعات التالية:
+                </p>
+                <ul className="space-y-2 text-[10px] text-gray-500 font-bold pr-4">
+                   <li>• قطاع الذكاء الاصطناعي: (المشاريع، النماذج، وسجلات المعالجة).</li>
+                   <li>• وكالة التسويق: (الحملات، البيانات التحليلية، والتعاقدات الجارية).</li>
+                   <li>• منصة التواصل: (المحادثات، المجموعات، والملفات المشتركة).</li>
+                   <li>• صندوق المنتجات: (قوائم المشتريات، التقييمات، وتراخيص الاستخدام).</li>
+                   <li>• المحفظة الموحدة: (الرصيد المتبقي، سجل عمليات الشحن، والتحويلات).</li>
+                </ul>
+             </div>
+
+             <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] space-y-4">
+                <h3 className="text-white font-black italic text-xs flex items-center gap-2 justify-end">🛡️ أولاً: بند التوثيق والاعتماد الرقمي</h3>
+                <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                   نحيطكم علماً بأنه بموجب معايير التوثيق الرقمي العالمية المنصوص عليها في شهادات الأيزو (ISO/IEC 27001, ISO 27701, ISO 9001)، فإن البيانات التي تم توثيقها من خلال قطاع التوثيق الرقمي لن تخضع لعملية الحذف. تلتزم المنظومة بهذه المعايير لمنع الحذف أو التعديل في قواعد البيانات الموثقة لضمان عدم التلاعب بالأصول الرقمية من الداخل أو الخارج، وتمتثل الشركة للمراجعة الدورية لضمان ذلك.
+                </p>
+             </div>
+
+             {isDeveloper && (
+               <div className="bg-royal-blue/5 border border-royal-blue/10 p-6 rounded-[2rem] space-y-4">
+                  <h3 className="text-royal-blue font-black italic text-xs flex items-center gap-2 justify-end">💻 ثانياً: تنبيه خاص بالمطورين (صندوق المنتجات)</h3>
+                  <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                    إذا كنت مطوراً مسجلاً ولديك منتجات معروضة للبيع في صندوق المنتجات:
+                  </p>
+                  <ul className="space-y-2 text-[10px] text-gray-500 font-bold pr-4">
+                     <li>• سيتم مسح المنتجات أو إيقاف البيع فوراً إذا كان العقد المبرم بيننا يسمح للمطور بإلغاء البيع من طرف واحد.</li>
+                     <li>• في حال عدم نص العقد على حقك في إيقاف البيع، سيبقى المنتج متاحاً ما لم تتخذ الشركة قراراً بالإيقاف بناءً على الصلاحيات المنصوص عليها في العقد المبرم.</li>
+                  </ul>
+                  <p className="text-[10px] text-royal-blue/70 font-black italic">يرجى مراجعة بنود عقدك مع الشركة قبل إتمام عملية الحذف.</p>
+               </div>
+             )}
+
+             <div className="pt-6 border-t border-white/5">
+                <p className="text-[10px] text-gray-600 font-bold text-center italic mb-6">الحذف لا رجعة فيه، يرجى سحب أرصدتك وحفظ بياناتك أولاً.</p>
+                <button 
+                  onClick={deleteAccount}
+                  className="w-full bg-red-500 text-white font-black py-4 rounded-2xl hover:bg-red-600 transition-all shadow-xl shadow-red-500/20 uppercase tracking-widest text-xs"
+                >
+                  تأكيد الحذف النهائي للحساب
+                </button>
+             </div>
+          </motion.div>
+        );
+      }
+
+      case "region": {
+        const filteredCountries = ARAB_COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()));
         return (
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="p-8 space-y-6 text-right">
-            <div className="grid grid-cols-1 gap-4">
-              {["مصر", "المملكة العربية السعودية", "الإمارات العربية المتحدة", "الكويت", "قطر", "منطقة أخرى"].map((country) => (
+            <div className="relative mb-6">
+               <input 
+                type="text" 
+                placeholder="ابحث عن دولتك..." 
+                className="w-full bg-white/[0.02] border border-white/10 p-4 pr-11 rounded-2xl focus:border-royal-blue outline-none text-white text-sm text-right"
+                value={countrySearch}
+                onChange={(e) => setCountrySearch(e.target.value)}
+               />
+               <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto px-1">
+              {filteredCountries.map((c) => (
                 <button 
-                  key={country}
-                  onClick={() => handleUpdateRegion(country)}
-                  className={`flex flex-row-reverse items-center justify-between p-5 rounded-2xl border transition-all ${region === country ? 'bg-royal-blue/10 border-royal-blue text-white' : 'bg-white/[0.02] border-white/5 text-gray-400 hover:border-white/20'}`}
+                  key={c.id}
+                  onClick={() => handleUpdateRegion(c.name)}
+                  className={`flex flex-row-reverse items-center justify-between p-5 rounded-2xl border transition-all ${region === c.name ? 'bg-royal-blue/10 border-royal-blue text-white' : 'bg-white/[0.02] border-white/5 text-gray-400 hover:border-white/20'}`}
                 >
-                  <span className="font-black italic">{country}</span>
-                  {region === country && <CheckCircle2 size={18} className="text-royal-blue" />}
+                  <span className="font-black italic text-right">{c.name}</span>
+                  {region === c.name && <CheckCircle2 size={18} className="text-royal-blue" />}
                 </button>
               ))}
+              {filteredCountries.length === 0 && (
+                <div className="col-span-full py-12 text-center text-gray-600 italic font-bold">لا توجد نتائج مطابقة لبحثك</div>
+              )}
             </div>
           </motion.div>
         );
+      }
 
       default:
         return (
@@ -496,6 +662,7 @@ export default function Settings() {
             <SettingItem icon={Shield} title="توثيق الشخصية الرقمية" desc="رفع المستندات الرسمية للحصول على العلامة الزرقاء" onClick={() => setView("verification")} />
             <SettingItem icon={Globe} title="المنطقة والرموز المحلية" desc="تحديد العملة ونطاق التوقيت الخاص بالمستخدم" onClick={() => setView("region")} />
             <SettingItem icon={Wallet} title="المحفظة والعملات الرقمية" desc="إدارة الأرصدة البنكية وعمليات شحن Bx" onClick={() => window.location.href = "https://wallet.bbtech.cloud"} external />
+            <SettingItem icon={Trash2} title="حذف الحساب الموحد" desc="المسح النهائي لبيانات الحساب وتوقف الخدمات" onClick={() => setView("deletion")} danger />
           </div>
         );
     }
