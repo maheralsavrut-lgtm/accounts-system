@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate, Link } from "react-router-dom";
 import { auth, db } from "../lib/firebase";
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
+import { GoogleAuthProvider, GithubAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Mail, Lock, LogIn, Shield, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { handleAuthRedirect, setSSOSession } from "../lib/auth-sso";
@@ -29,23 +29,8 @@ export default function Login() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg("");
-    try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      await handleSuccess(res.user);
-    } catch (err: any) {
-      setErrorMsg("البريد الإلكتروني أو كلمة المرور غير صحيحة");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogle = async () => {
-    const provider = new GoogleAuthProvider();
+  const handleSocialLogin = async (providerType: 'google' | 'github') => {
+    const provider = providerType === 'google' ? new GoogleAuthProvider() : new GithubAuthProvider();
     setLoading(true);
     setErrorMsg("");
     try {
@@ -71,7 +56,7 @@ export default function Login() {
           createdAt: now,
           activity: [
             {
-              event: "انشاء حساب (جوجل)",
+              event: `انشاء حساب (${providerType === 'google' ? 'جوجل' : 'جيت هاب'})`,
               sector: "الحسابات",
               date: dateStr,
               time: timeStr
@@ -88,7 +73,22 @@ export default function Login() {
       
       await handleSuccess(res.user);
     } catch (err) {
-      setErrorMsg("فشل الدخول عبر جوجل");
+      setErrorMsg(`فشل الدخول عبر ${providerType === 'google' ? 'جوجل' : 'جيت هاب'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      const res = await signInWithEmailAndPassword(auth, email, password);
+      await handleSuccess(res.user);
+    } catch (err: any) {
+      setErrorMsg("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -102,21 +102,30 @@ export default function Login() {
         className="w-full max-w-md bg-[#0A0A0A] border border-white/5 p-8 md:p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
       >
         <div className="text-center mb-8">
-          <div className="inline-block p-3 bg-royal-blue/10 rounded-2xl mb-4 border border-royal-blue/20 text-royal-blue">
+          <div className="inline-block p-3 bg-royal-blue/10 rounded-2xl mb-4 border border-royal-blue/20 text-royal-blue transition-transform hover:scale-110">
             <Shield size={28} />
           </div>
           <h1 className="text-xl font-black text-white uppercase tracking-tighter">Black Box Accounts</h1>
           <p className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mt-1">تسجيل الدخول</p>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <button 
-            onClick={handleGoogle} 
+            onClick={() => handleSocialLogin('google')} 
             disabled={loading}
             className="w-full bg-white text-black font-black py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-royal-blue hover:text-white transition-all duration-300 group text-sm shadow-lg shadow-white/5 disabled:opacity-50"
           >
             <img src="/google.png" className="w-4 h-4 group-hover:brightness-0 group-hover:invert transition-all" alt="G" referrerPolicy="no-referrer" />
             المتابعة باستخدام Google
+          </button>
+
+          <button 
+            onClick={() => handleSocialLogin('github')} 
+            disabled={loading}
+            className="w-full bg-white/[0.03] text-white border border-white/10 font-black py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-royal-blue hover:border-royal-blue transition-all duration-300 group text-sm shadow-lg disabled:opacity-50"
+          >
+            <img src="/GitHub copy.png" className="w-5 h-5 transition-all" alt="GitHub" referrerPolicy="no-referrer" />
+            المتابعة باستخدام GitHub
           </button>
 
           <div className="relative py-2 text-center text-[9px] uppercase">
