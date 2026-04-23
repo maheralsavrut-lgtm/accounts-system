@@ -12,6 +12,8 @@ import Settings from "./pages/Settings";
 import About from "./pages/About";
 import Legal from "./pages/Legal";
 import Standards from "./pages/Standards";
+import MobileUpload from "./pages/MobileUpload";
+import Activities from "./pages/Activities";
 
 function AppContent() {
   const { loading, user } = useAuth();
@@ -73,6 +75,8 @@ function AppContent() {
           <Route path="/about" element={<About />} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/standards" element={<Standards />} />
+          <Route path="/sync-upload/:userId" element={<MobileUpload />} />
+          <Route path="/activities" element={<Activities />} />
 
           {/* Compatibility Redirects */}
           <Route path="/:userID" element={<Navigate to="/profile" />} />
