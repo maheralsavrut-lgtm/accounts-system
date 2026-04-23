@@ -4,36 +4,40 @@ import { useAuth } from "../context/AuthContext";
 import { 
   User, Wallet, Shield, Award, MapPin, 
   ExternalLink, CheckCircle2, AlertCircle, Clock, Activity,
-  ChevronLeft
+  ChevronLeft, Info
 } from "lucide-react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 
 interface ActivityRowProps {
   event: string;
-  sector: string;
-  date: string;
-  time: string;
+  category: string;
+  timestamp: any;
 }
 
-const ActivityRow: React.FC<ActivityRowProps> = ({ event, sector, date, time }) => (
-  <div className="flex items-center justify-between p-4 border-b border-white/[0.03] hover:bg-white/[0.02] transition-all group bg-white/[0.01]">
-    <div className="flex flex-col items-end flex-1 px-4 order-4">
-      <span className="text-white font-black italic text-xs">{event}</span>
+const ActivityRow: React.FC<ActivityRowProps> = ({ event, category, timestamp }) => {
+  const dateStr = timestamp?.toDate ? timestamp.toDate().toLocaleDateString('ar-EG') : '---';
+  const timeStr = timestamp?.toDate ? timestamp.toDate().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '---';
+  
+  return (
+    <div className="flex items-center justify-between p-4 border-b border-white/[0.03] hover:bg-white/[0.02] transition-all group bg-white/[0.01]">
+      <div className="flex flex-col items-end flex-1 px-4 order-4">
+        <span className="text-white font-black italic text-xs">{event}</span>
+      </div>
+      <div className="w-24 text-right order-3">
+        <span className="text-royal-blue text-[10px] font-bold uppercase tracking-widest">{category}</span>
+      </div>
+      <div className="w-24 text-right order-2">
+        <span className="text-gray-500 text-[10px] font-bold">{dateStr}</span>
+      </div>
+      <div className="w-16 text-right order-1">
+        <span className="text-gray-600 text-[10px] font-mono">{timeStr}</span>
+      </div>
     </div>
-    <div className="w-24 text-right order-3">
-      <span className="text-royal-blue text-[10px] font-bold uppercase tracking-widest">{sector}</span>
-    </div>
-    <div className="w-24 text-right order-2">
-      <span className="text-gray-500 text-[10px] font-bold">{date}</span>
-    </div>
-    <div className="w-16 text-right order-1">
-      <span className="text-gray-600 text-[10px] font-mono">{time}</span>
-    </div>
-  </div>
-);
+  );
+};
 
 export default function Profile() {
-  const { user, userData, loading } = useAuth();
+  const { user, userData, loading, profileCompletion } = useAuth();
 
   if (loading) return <div className="min-h-screen flex items-center justify-center italic text-royal-blue">جاري التحميل...</div>;
   if (!user) return <Navigate to="/login" />;
@@ -41,6 +45,13 @@ export default function Profile() {
   const isVerified = userData?.verificationStatus === "verified";
   const isPendingVerification = userData?.verificationStatus === "pending";
   const isActive = userData?.accountStatus === "active";
+
+  const radius = 36;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (profileCompletion / 100) * circumference;
+
+  const activities = userData?.activities || [];
+  const latestActivities = [...activities].sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 5);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 relative z-10" dir="rtl">
@@ -52,7 +63,26 @@ export default function Profile() {
             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
             className="glass p-8 rounded-[3rem] border border-white/5 text-center flex flex-col items-center shadow-2xl relative overflow-hidden"
           >
-            <div className="relative group mb-6">
+            {/* Completion Circle Background */}
+            <div className="absolute top-4 left-4 group cursor-help">
+              <div className="relative w-16 h-16 flex items-center justify-center">
+                <svg className="w-16 h-16 transform -rotate-90">
+                  <circle cx="32" cy="32" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" className="text-white/5" />
+                  <motion.circle 
+                    cx="32" cy="32" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" 
+                    strokeDasharray={circumference}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{ strokeDashoffset: offset }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    className="text-royal-blue" 
+                  />
+                </svg>
+                <span className="absolute text-[10px] font-black text-white italic">{profileCompletion}%</span>
+              </div>
+              <div className="absolute top-1/2 -translate-y-1/2 left-full ml-2 bg-royal-blue text-white text-[8px] font-black italic p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl z-50">نظام اكتمال الملف الشخصي</div>
+            </div>
+
+            <div className="relative group mb-6 mt-4">
               <div className="w-32 h-32 rounded-full border-2 border-royal-blue/30 p-1 flex items-center justify-center bg-royal-blue/5 overflow-hidden">
                 {userData?.photoURL || user.photoURL ? (
                   <img src={userData?.photoURL || user.photoURL} alt="Avatar" className="w-full h-full object-cover rounded-full" />
@@ -61,14 +91,20 @@ export default function Profile() {
                 )}
               </div>
               
-              {/* Verified Badge */}
+              {/* Verified Badge with Tooltip */}
               {isVerified && (
                 <div 
                   className="absolute bottom-1 right-1 bg-royal-blue text-white p-1.5 rounded-full border-2 border-[#0A0A0A] shadow-lg cursor-help group/v transition-transform hover:scale-110"
                 >
                   <CheckCircle2 size={16} fill="white" className="text-royal-blue" />
-                  <div className="absolute bottom-full right-0 mb-3 whitespace-nowrap bg-royal-blue text-white text-[10px] font-black italic p-3 rounded-2xl opacity-0 group-hover/v:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/10 z-50">
-                     تم التحقق من هوية هذا المستخدم
+                  <div className="absolute bottom-full right-0 mb-3 w-48 bg-[#0A0A0A] border border-white/10 text-white p-4 rounded-2xl opacity-0 group-hover/v:opacity-100 transition-all pointer-events-none shadow-2xl z-50 scale-95 group-hover/v:scale-100">
+                     <div className="flex items-center gap-2 mb-2 border-b border-white/10 pb-2">
+                        <Shield size={14} className="text-royal-blue" />
+                        <span className="text-[10px] font-black italic uppercase tracking-widest text-royal-blue">Verified Unit</span>
+                     </div>
+                     <p className="text-[9px] font-bold text-gray-400 leading-relaxed text-right italic">
+                        هذا الحساب تم توثيقه بربط الهوية الوطنية، مما يضمن مصداقية التعاملات والأصول الرقمية في المنظومة.
+                     </p>
                   </div>
                 </div>
               )}
@@ -84,7 +120,7 @@ export default function Profile() {
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter mb-1">الرصيد الحالي</p>
                 <div className="flex items-center justify-center gap-1.5">
                   <span className="text-xl font-black text-royal-blue italic">{userData?.bx_balance || 0}</span>
-                  <span className="text-[10px] font-black text-white italic opacity-50 uppercase">Bx</span>
+                  <img src="/BX-Icon.png" style={{ width: '20px', height: '20px' }} className="object-contain" alt="BX" />
                 </div>
               </div>
               <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5">
@@ -150,28 +186,30 @@ export default function Profile() {
                 <Clock className="text-royal-blue" size={24} />
                 <h3 className="text-xl font-black text-white italic">التحليلات والنشاط</h3>
               </div>
-              <Activity size={20} className="text-gray-600" />
+              <Link to="/activities" className="text-[10px] font-black text-gray-500 hover:text-royal-blue transition-colors flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl">
+                 عرض السجل التفصيلي
+                 <ChevronLeft size={14} />
+              </Link>
             </div>
             
             <div className="bg-[#0A0A0A]">
               {/* Table Header */}
               <div className="flex items-center justify-between p-4 bg-white/[0.02] border-b border-white/5 text-right font-black italic text-[9px] uppercase tracking-widest text-gray-500">
                  <div className="flex-1 px-4 order-4">الحدث</div>
-                 <div className="w-24 order-3">القطاع</div>
+                 <div className="w-24 order-3">الفئة</div>
                  <div className="w-24 order-2">التاريخ</div>
                  <div className="w-16 order-1">الوقت</div>
               </div>
 
               {/* Rows */}
               <div className="divide-y divide-white/[0.02]">
-                {userData?.activity && userData.activity.length > 0 ? (
-                  userData.activity.slice().reverse().map((act: any, idx: number) => (
+                {latestActivities.length > 0 ? (
+                  latestActivities.map((act: any, idx: number) => (
                     <ActivityRow 
                       key={idx}
-                      event={act.event}
-                      sector={act.sector}
-                      date={act.date}
-                      time={act.time}
+                      event={act.action}
+                      category={act.category}
+                      timestamp={act.timestamp}
                     />
                   ))
                 ) : (
